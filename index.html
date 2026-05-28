@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ユーザー情報登録</title>
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input[type="text"] { width: 100%; padding: 8px; box-sizing: border-box; }
+        button { padding: 10px 20px; background-color: #06C755; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        #loading { color: gray; }
+    </style>
+</head>
+<body>
+
+    <h2>アカウント連携</h2>
+    <div id="loading">LINEログイン中...</div>
+
+    <div id="app" style="display: none;">
+        <div class="form-group">
+            <label>LINE登録名</label>
+            <input type="text" id="lineName" readonly>
+        </div>
+        <div class="form-group">
+            <label>管理用ユーザー名（変更後の名前）</label>
+            <input type="text" id="managementName" placeholder="社内管理用の名前を入力してください">
+        </div>
+        <button id="submitBtn">スプレッドシートに登録</button>
+    </div>
+
+    <script>
+        // 先ほどコピーしたGASのウェブアプリURLをここに貼り付け
+        const GAS_WEB_APP_URL = "YOUR_GAS_WEB_APP_URL_HERE"; 
+        // 取得したLIFF IDをここに貼り付け
+        const LIFF_ID = "YOUR_LIFF_ID_HERE"; 
+
+        let userProfile = {};
+
+        async function initLiff() {
+            try {
+                await liff.init({ liffId: LIFF_ID });
+                if (!liff.isLoggedIn()) {
+                    liff.login();
+                    return;
+                }
+                
+                // プロフィール情報の取得
+                userProfile = await liff.getProfile();
+                
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('app').style.display = 'block';
+                
+                // LINEでの名前を表示（編集不可）
+                document.getElementById('lineName').value = userProfile.displayName;
+                
+            } catch (error) {
+                console.error("LIFF初期化エラー:", error);
+                alert("プロフィールの取得に失敗しました。LINEアプリ内から開いてください。");
+            }
+        }
+
+        document.getElementById('submitBtn').addEventListener('click', async () => {
+            const mName = document.getElementById('managementName').value.trim();
+            if (!mName) {
+                alert("管理用ユーザー名を入力してください。");
+                return;
+            }
+
+            const sendData = {
+                userId: userProfile.userId, // LINE UID
+                displayName: userProfile.displayName, // LINEの登録名
+                managementName: mName // 管理用の変更したユーザー名
+            };
+
+            try {
+                document.getElementById('submitBtn').disabled = true;
+                document.getElementById('submitBtn').innerText = "送信中...";
+
+                // GASへデータをPOST送信
+                const response = await fetch(GAS_WEB_APP_URL, {
+                    method: "POST",
+                    mode: "cors",
+                    headers: {
+                        "Content-Type": "text/plain" // GASの仕様上 text/plain を指定するのが安全
+                    },
+                    body: JSON.stringify(sendData)
+                });
+
+                const result = await response.json();
+                if (result.status === 'success') {
+                    alert("登録が完了しました！");
+                    liff.closeWindow(); // LIFFウィンドウを閉じる
+                } else {
+                    alert("エラーが発生しました: " + result.message);
+                }
+            } catch (error) {
+                console.error("送信エラー:", error);
+                alert("通信エラーが発生しました。");
+            } finally {
+                document.getElementById('submitBtn').disabled = false;
+                document.getElementById('submitBtn').innerText = "スプレッドシートに登録";
+            }
+        });
+
+        // LIFF起動
+        initLiff();
+    </script>
+</body>
+</html>
